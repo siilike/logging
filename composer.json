@@ -1,0 +1,26 @@
+{
+	"name": "siilike/logging",
+	"description": "Convenient logging for PHP",
+	"license": "MIT",
+	"autoload": {
+		"psr-4": {
+			"Siilike\\Logging\\": "./"
+		}
+	},
+	"authors": [
+		{
+			"name": "Lauri Keel",
+			"email": "siilike@ruja.ee"
+		}
+	],
+	"require": {
+		"php": ">=8.2"
+	},
+	"suggest": {
+		"psr/log": "^3",
+		"sentry/sentry": "^3",
+		"symfony/console": "^6",
+		"ext-mongodb": "*",
+		"ext-sockets": "*"
+	}
+}
