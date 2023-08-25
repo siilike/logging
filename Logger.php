@@ -153,7 +153,7 @@ class Logger
 		}
 
 		$this->requestId = \time() . \substr(\str_replace([ "/", "+", "=" ], '1', \base64_encode(\random_bytes(5))), 0, 5);
-		$this->clientId = \substr(\preg_replace('#[^a-zA-Z0-9]+#', '', @$_SERVER['HTTP_X_CLIENT_ID'] ?? ''), 0, 10);
+		$this->clientId = \substr(\preg_replace('#[^a-zA-Z0-9]+#', '', $_SERVER['HTTP_X_CLIENT_ID'] ?? ''), 0, 10);
 		$this->requestStart = (int)(\microtime(true)*1000);
 
 		$this->level = $this->level ?? (static::$levelMap[$this->getEnvOrConst('LOGLEVEL') ? \strtoupper($this->getEnvOrConst('LOGLEVEL')) : ($this->getEnvOrConst('APP_ENV') === 'development' ? 'TRACE0' : 'TRACE')]);
@@ -174,7 +174,7 @@ class Logger
 			$this->setContext($opts['context']);
 		}
 
-		if(@$opts['defineGlobals'] !== false)
+		if(($opts['defineGlobals'] ?? true) !== false)
 		{
 			$this->defineGlobals();
 		}
@@ -606,8 +606,8 @@ class Logger
 				{
 					$scope->setUser(
 					[
-						'id' => @$this->context['uid'],
-						'ip_address' => @$_SERVER['HTTP_X_FORWARDED_FOR'],
+						'id' => $this->context['uid'] ?? null,
+						'ip_address' => $_SERVER['HTTP_X_FORWARDED_FOR'] ?? null,
 					]);
 
 					$scope->setExtras($this->context);
