@@ -185,6 +185,11 @@ class Logger
 
 		$this->rootDirectory = $this->rootDirectory ?? (\defined('ROOT') ? ROOT : (\defined('ABSPATH') ? ABSPATH : ''));
 
+		if(!str_ends_with($this->rootDirectory, "/"))
+		{
+			$this->rootDirectory .= '/';
+		}
+
 		if($this->outputErrorLog)
 		{
 			$this->logsDirectory = $this->logsDirectory ?? (($this->rootDirectory ?: __DIR__) . '/logs/');
@@ -369,26 +374,28 @@ class Logger
 			}
 		}
 
-		$msg = str_replace($this->rootDirectory, '', $file).":$line [$levelName][".$this->getContextAsString()."] $m";
+		$location = str_replace($this->rootDirectory, '', $file).":".$line;
+
+		$logMsg0 = $m;
 
 		if(!empty($ctx))
 		{
-			$msg .= ' ' . \json_encode($ctx, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PARTIAL_OUTPUT_ON_ERROR | JSON_ERROR_RECURSION | JSON_ERROR_INF_OR_NAN | JSON_ERROR_UNSUPPORTED_TYPE);
+			$logMsg0 .= ' ' . \json_encode($ctx, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PARTIAL_OUTPUT_ON_ERROR | JSON_ERROR_RECURSION | JSON_ERROR_INF_OR_NAN | JSON_ERROR_UNSUPPORTED_TYPE);
 		}
-
-		$logMsg = $msg;
 
 		if(!empty($throwables))
 		{
 			foreach($throwables as $a)
 			{
-				$logMsg .= "\n".$a;
+				$logMsg0 .= "\n".$a;
 			}
 		}
 
-		$this->postprocessLogMessage($logMsg, $throwables);
+		$this->postprocessLogMessage($logMsg0, $throwables);
 
-		$this->doLog0($logMsg, $level);
+		$logMsg = "$location [$levelName][".$this->getContextAsString()."] $logMsg0";
+
+		$this->doLog0($location, $logMsg, $logMsg0, $level, $levelName);
 
 		if($level >= $this->sentryLevel)
 		{
@@ -396,7 +403,7 @@ class Logger
 		}
 	}
 
-	protected function doLog0($logMsg, $level): void
+	protected function doLog0($location, $logMsg, $logMsg0, $level, $levelName): void
 	{
 		$timestamp = '['.date('Y-m-d H:i:s').']';
 
@@ -442,7 +449,7 @@ class Logger
 
 		if($this->outputSentry)
 		{
-			$this->sentry->addBreadcrumb(new \Sentry\Breadcrumb(static::$levelToSentry[$level], static::$levelToSentryType[$level], 'default', $logMsg));
+			$this->sentry->addBreadcrumb(new \Sentry\Breadcrumb(static::$levelToSentry[$level], static::$levelToSentryType[$level], $levelName, "$location: $logMsg0"));
 		}
 	}
 
