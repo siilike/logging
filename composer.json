@@ -14,11 +14,11 @@
 		}
 	],
 	"require": {
-		"php": ">=8.2"
+		"php": ">=8.2",
+		"sentry/sentry": "^3"
 	},
 	"suggest": {
 		"psr/log": "^3",
-		"sentry/sentry": "^3",
 		"symfony/console": "^6",
 		"ext-mongodb": "*",
 		"ext-sockets": "*"

@@ -70,6 +70,28 @@ class Logger
 		self::FATAL => 2,
 	];
 
+	protected static array $levelToSentry =
+	[
+		self::TRACE0 => \Sentry\Breadcrumb::LEVEL_DEBUG,
+		self::TRACE => \Sentry\Breadcrumb::LEVEL_DEBUG,
+		self::DEBUG => \Sentry\Breadcrumb::LEVEL_DEBUG,
+		self::INFO => \Sentry\Breadcrumb::LEVEL_INFO,
+		self::WARN => \Sentry\Breadcrumb::LEVEL_WARNING,
+		self::ERROR => \Sentry\Breadcrumb::LEVEL_ERROR,
+		self::FATAL => \Sentry\Breadcrumb::LEVEL_FATAL,
+	];
+
+	protected static array $levelToSentryType =
+	[
+		self::TRACE0 => \Sentry\Breadcrumb::TYPE_DEFAULT,
+		self::TRACE => \Sentry\Breadcrumb::TYPE_DEFAULT,
+		self::DEBUG => \Sentry\Breadcrumb::TYPE_DEFAULT,
+		self::INFO => \Sentry\Breadcrumb::TYPE_DEFAULT,
+		self::WARN => \Sentry\Breadcrumb::TYPE_DEFAULT,
+		self::ERROR => \Sentry\Breadcrumb::TYPE_ERROR,
+		self::FATAL => \Sentry\Breadcrumb::TYPE_ERROR,
+	];
+
 	protected static ?Logger $instance = null;
 
 	protected string $requestId;
@@ -97,6 +119,7 @@ class Logger
 	protected bool $outputStdout = false;
 	protected $outputOutput = false;
 	protected bool $outputSymfony = false;
+	protected bool $outputSentry = false;
 
 	protected bool $outputSyslog = false;
 	protected bool $outputRemoteSyslog = false;
@@ -122,6 +145,7 @@ class Logger
 			'syslog',
 			'remoteSyslog',
 			'errorLog',
+			'sentry',
 		] as $a)
 		{
 			$k = 'output'.\ucfirst($a);
@@ -414,6 +438,11 @@ class Logger
 		if($this->outputErrorLog)
 		{
 			\error_log("$timestamp $logMsg\n", 3, $this->logFile);
+		}
+
+		if($this->outputSentry)
+		{
+			$this->sentry->addBreadcrumb(new \Sentry\Breadcrumb(static::$levelToSentry[$level], static::$levelToSentryType[$level], 'default', $logMsg));
 		}
 	}
 
