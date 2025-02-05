@@ -72,24 +72,24 @@ class Logger
 
 	protected static array $levelToSentry =
 	[
-		self::TRACE0 => \Sentry\Breadcrumb::LEVEL_DEBUG,
-		self::TRACE => \Sentry\Breadcrumb::LEVEL_DEBUG,
-		self::DEBUG => \Sentry\Breadcrumb::LEVEL_DEBUG,
-		self::INFO => \Sentry\Breadcrumb::LEVEL_INFO,
-		self::WARN => \Sentry\Breadcrumb::LEVEL_WARNING,
-		self::ERROR => \Sentry\Breadcrumb::LEVEL_ERROR,
-		self::FATAL => \Sentry\Breadcrumb::LEVEL_FATAL,
+		self::TRACE0 => 'debug', // \Sentry\Breadcrumb::LEVEL_DEBUG
+		self::TRACE => 'debug', // \Sentry\Breadcrumb::LEVEL_DEBUG
+		self::DEBUG => 'debug', // \Sentry\Breadcrumb::LEVEL_DEBUG
+		self::INFO => 'info', // \Sentry\Breadcrumb::LEVEL_INFO
+		self::WARN => 'warning', // \Sentry\Breadcrumb::LEVEL_WARNING
+		self::ERROR => 'error', // \Sentry\Breadcrumb::LEVEL_ERROR
+		self::FATAL => 'fatal', // \Sentry\Breadcrumb::LEVEL_FATAL
 	];
 
 	protected static array $levelToSentryType =
 	[
-		self::TRACE0 => \Sentry\Breadcrumb::TYPE_DEFAULT,
-		self::TRACE => \Sentry\Breadcrumb::TYPE_DEFAULT,
-		self::DEBUG => \Sentry\Breadcrumb::TYPE_DEFAULT,
-		self::INFO => \Sentry\Breadcrumb::TYPE_DEFAULT,
-		self::WARN => \Sentry\Breadcrumb::TYPE_DEFAULT,
-		self::ERROR => \Sentry\Breadcrumb::TYPE_ERROR,
-		self::FATAL => \Sentry\Breadcrumb::TYPE_ERROR,
+		self::TRACE0 => 'default', // \Sentry\Breadcrumb::TYPE_DEFAULT,
+		self::TRACE => 'default', // \Sentry\Breadcrumb::TYPE_DEFAULT,
+		self::DEBUG => 'default', // \Sentry\Breadcrumb::TYPE_DEFAULT,
+		self::INFO => 'default', // \Sentry\Breadcrumb::TYPE_DEFAULT,
+		self::WARN => 'default', // \Sentry\Breadcrumb::TYPE_DEFAULT,
+		self::ERROR => 'error', // \Sentry\Breadcrumb::TYPE_ERROR,
+		self::FATAL => 'error', // \Sentry\Breadcrumb::TYPE_ERROR,
 	];
 
 	protected static ?Logger $instance = null;
