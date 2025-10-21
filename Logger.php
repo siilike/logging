@@ -374,7 +374,7 @@ class Logger
 			}
 		}
 
-		$location = str_replace($this->rootDirectory, '', $file).":".$line;
+		$location = ltrim($file, $this->rootDirectory).":".$line;
 
 		$logMsg0 = $m;
 
