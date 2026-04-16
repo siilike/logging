@@ -28,6 +28,39 @@ class LoggerAdapter extends \Psr\Log\AbstractLogger
 {
 	public function log($level, string|\Stringable $message, array $context = array()): void
 	{
+		if(isset($context['exception']) && $context['exception'] instanceof \Throwable)
+		{
+			$exception = $context['exception'];
+
+			unset($context['exception']);
+
+			switch($level)
+			{
+				case 'emergency':
+				case 'alert':
+				case 'critical':
+				case 'error':
+					cerror($message . ' {}', $exception, $context);
+					break;
+				case 'warning':
+					cwarn($message . ' {}', $exception, $context);
+					break;
+				case 'notice':
+					cinfo($message . ' {}', $exception, $context);
+					break;
+				case 'info':
+					cdebug($message . ' {}', $exception, $context);
+					break;
+				case 'debug':
+					ctrace($message . ' {}', $exception, $context);
+					break;
+				default:
+					cinfo($message . ' {}', $exception, $context);
+			}
+
+			return;
+		}
+
 		switch($level)
 		{
 			case 'emergency':

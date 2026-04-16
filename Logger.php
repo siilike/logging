@@ -26,6 +26,22 @@ namespace Siilike\Logging;
 
 class Logger
 {
+	protected const OUTPUT_FORMAT_PLAIN = 'plain';
+	protected const OUTPUT_FORMAT_JSON = 'json';
+	protected const OUTPUT_FORMAT_HTML = 'html';
+	protected const OUTPUT_TYPES =
+	[
+		'buffer',
+		'stderr',
+		'stdout',
+		'output',
+		'symfony',
+		'syslog',
+		'remoteSyslog',
+		'errorLog',
+		'sentry',
+	];
+
 	const TRACE0 = 0;
 	const TRACE = 1;
 	const DEBUG = 2;
@@ -96,7 +112,7 @@ class Logger
 
 	protected string $requestId;
 	protected string $clientId;
-	protected string $requestStart;
+	protected int $requestStart;
 
 	protected string $syslogHost = '127.0.0.1';
 	protected string $syslogPort = '514';
@@ -115,15 +131,30 @@ class Logger
 	protected ?string $rootDirectory = null;
 
 	protected bool $outputBuffer = false;
+	protected string $outputBufferFormat = self::OUTPUT_FORMAT_PLAIN;
 	protected bool $outputStderr = false;
+	protected string $outputStderrFormat = self::OUTPUT_FORMAT_PLAIN;
 	protected bool $outputStdout = false;
+	protected string $outputStdoutFormat = self::OUTPUT_FORMAT_PLAIN;
 	protected $outputOutput = false;
+	protected string $outputOutputFormat = self::OUTPUT_FORMAT_PLAIN;
 	protected bool $outputSymfony = false;
+	protected string $outputSymfonyFormat = self::OUTPUT_FORMAT_PLAIN;
 	protected bool $outputSentry = false;
+	protected string $outputSentryFormat = self::OUTPUT_FORMAT_PLAIN;
 
 	protected bool $outputSyslog = false;
+	protected string $outputSyslogFormat = self::OUTPUT_FORMAT_PLAIN;
 	protected bool $outputRemoteSyslog = false;
+	protected string $outputRemoteSyslogFormat = self::OUTPUT_FORMAT_PLAIN;
 	protected bool $outputErrorLog = false;
+	protected string $outputErrorLogFormat = self::OUTPUT_FORMAT_PLAIN;
+	protected array $enabledFormats =
+	[
+		self::OUTPUT_FORMAT_PLAIN => false,
+		self::OUTPUT_FORMAT_JSON => false,
+		self::OUTPUT_FORMAT_HTML => false,
+	];
 
 	protected $buffer = null;
 	protected $stdout = null;
@@ -135,24 +166,13 @@ class Logger
 
 	public function __construct(array $opts)
 	{
-		foreach(
-		[
-			'buffer',
-			'stderr',
-			'stdout',
-			'output',
-			'symfony',
-			'syslog',
-			'remoteSyslog',
-			'errorLog',
-			'sentry',
-		] as $a)
+		foreach(static::OUTPUT_TYPES as $a)
 		{
 			$k = 'output'.\ucfirst($a);
 
-			if(!empty($opts[$k]))
+			if(\array_key_exists($k, $opts))
 			{
-				$this->$k = true;
+				$this->configureOutput($a, $opts[$k]);
 			}
 		}
 
@@ -209,7 +229,7 @@ class Logger
 		}
 	}
 
-	public static function create($opts = []): ?self
+	public static function create(array $opts = []): self
 	{
 		$instance = new static($opts);
 
@@ -229,12 +249,12 @@ class Logger
 	{
 		if($this->outputBuffer)
 		{
-			$this->setOutputBuffer(true);
+			$this->setOutputBuffer($this->outputBufferFormat);
 		}
 
 		if($this->outputStderr)
 		{
-			$this->setOutputStderr(true);
+			$this->setOutputStderr($this->outputStderrFormat);
 		}
 
 		if($this->outputStdout)
@@ -244,7 +264,7 @@ class Logger
 
 		if($this->outputOutput)
 		{
-			$this->setOutputOutput(true);
+			$this->setOutputOutput($this->outputOutputFormat);
 		}
 
 		if($this->outputSymfony)
@@ -269,7 +289,7 @@ class Logger
 		}
 	}
 
-	public function initSentry($opts): \Sentry\State\HubInterface
+	public function initSentry(array $opts): \Sentry\State\HubInterface
 	{
 		\Sentry\init($opts);
 
@@ -287,7 +307,7 @@ class Logger
 		define('REQUEST_START', $this->requestStart);
 	}
 
-	public function log(string $file, string $line, int $level, string $message, array $args, bool $withCtx = false): void
+	public function log(string $file, int $line, int $level, mixed $message, array $args, bool $withCtx = false): void
 	{
 		if(($this->levels[$file] ?? $this->level) > $level)
 		{
@@ -374,28 +394,58 @@ class Logger
 			}
 		}
 
-		$location = ltrim($file, $this->rootDirectory).":".$line;
-
-		$logMsg0 = $m;
-
-		if(!empty($ctx))
+		if(!\is_string($m))
 		{
-			$logMsg0 .= ' ' . \json_encode($ctx, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PARTIAL_OUTPUT_ON_ERROR | JSON_ERROR_RECURSION | JSON_ERROR_INF_OR_NAN | JSON_ERROR_UNSUPPORTED_TYPE);
+			$m = $this->convertArgumentToString($m) ?? '';
 		}
 
-		if(!empty($throwables))
+		$file0 = ltrim($file, $this->rootDirectory);
+
+		$plainValue = null;
+		$jsonValue = null;
+
+		if($this->enabledFormats[self::OUTPUT_FORMAT_PLAIN] || $this->enabledFormats[self::OUTPUT_FORMAT_HTML])
 		{
-			foreach($throwables as $a)
+			$full = $m;
+
+			if(!empty($ctx))
 			{
-				$logMsg0 .= "\n".$a;
+				$full .= ' '.\json_encode($ctx, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PARTIAL_OUTPUT_ON_ERROR | JSON_ERROR_RECURSION | JSON_ERROR_INF_OR_NAN | JSON_ERROR_UNSUPPORTED_TYPE);
 			}
+
+			if(!empty($throwables))
+			{
+				foreach($throwables as $a)
+				{
+					$full .= "\n".$a;
+				}
+			}
+
+			$this->postprocessLogMessage($full, $throwables);
+
+			$plainValue = '['.date('Y-m-d H:i:s').'] '.$file0.":".$line.' ['.$levelName.']['.$this->getContextAsString().'] '.$full;
 		}
 
-		$this->postprocessLogMessage($logMsg0, $throwables);
+		if($this->enabledFormats[self::OUTPUT_FORMAT_JSON])
+		{
+			$record =
+			[
+				'timestamp' => date(DATE_ATOM),
+				'level' => \strtolower($levelName),
+				'file' => $file0,
+				'line' => $line,
+				'context' => $this->context,
+				'message' => $m,
+				'extra' => $ctx,
+				'exceptions' => $this->normalizeThrowables($throwables),
+			];
 
-		$logMsg = "$location [$levelName][".$this->getContextAsString()."] $logMsg0";
+			$this->postprocessLogRecord($record, $throwables);
 
-		$this->doLog0($location, $logMsg, $logMsg0, $level, $levelName);
+			$jsonValue = $this->encodeJson($record);
+		}
+
+		$this->doLog0($level, $levelName, $plainValue, $jsonValue);
 
 		if($level >= $this->sentryLevel)
 		{
@@ -403,57 +453,94 @@ class Logger
 		}
 	}
 
-	protected function doLog0($location, $logMsg, $logMsg0, $level, $levelName): void
+	protected function doLog0(int $level, string $levelName, ?string $plainValue, ?string $jsonValue): void
 	{
-		$timestamp = '['.date('Y-m-d H:i:s').']';
-
 		if($this->outputBuffer)
 		{
-			\fwrite($this->buffer, "$timestamp $logMsg\n");
+			\fwrite($this->buffer, $this->getFormattedValue($this->outputBufferFormat, $plainValue, $jsonValue)."\n");
 		}
 
 		if($this->outputStderr)
 		{
-			\fwrite($this->stderr, "$timestamp $logMsg\n");
+			\fwrite($this->stderr, $this->getFormattedValue($this->outputStderrFormat, $plainValue, $jsonValue)."\n");
 		}
 
 		if($this->outputStdout)
 		{
-			\fwrite($this->stdout, "$timestamp $logMsg\n");
+			\fwrite($this->stdout, $this->getFormattedValue($this->outputStdoutFormat, $plainValue, $jsonValue)."\n");
 		}
 
 		if($this->outputOutput)
 		{
-			\fwrite($this->output, $timestamp." ".($this->outputOutput === 'html' ? htmlspecialchars($logMsg) : $logMsg)."\n");
+			\fwrite($this->output, $this->getFormattedValue($this->outputOutputFormat, $plainValue, $jsonValue)."\n");
 		}
 
 		if($this->outputSymfony)
 		{
-			$this->symfony->write("$timestamp $logMsg\n", false, \Symfony\Component\Console\Output\Output::OUTPUT_RAW);
+			$this->symfony->write($this->getFormattedValue($this->outputSymfonyFormat, $plainValue, $jsonValue)."\n", false, \Symfony\Component\Console\Output\Output::OUTPUT_RAW);
 		}
 
 		if($this->outputSyslog)
 		{
-			\syslog(LOG_LOCAL0, $logMsg);
+			\syslog(LOG_LOCAL0, $this->getFormattedValue($this->outputSyslogFormat, $plainValue, $jsonValue));
 		}
 
 		if($this->outputRemoteSyslog)
 		{
-			$this->sendRemoteSyslog($logMsg, static::$levelToSyslog[$level]);
+			$this->sendRemoteSyslog($this->getFormattedValue($this->outputRemoteSyslogFormat, $plainValue, $jsonValue), static::$levelToSyslog[$level]);
 		}
 
 		if($this->outputErrorLog)
 		{
-			\error_log("$timestamp $logMsg\n", 3, $this->logFile);
+			\error_log($this->getFormattedValue($this->outputErrorLogFormat, $plainValue, $jsonValue)."\n", 3, $this->logFile);
 		}
 
 		if($this->outputSentry)
 		{
-			$this->sentry->addBreadcrumb(new \Sentry\Breadcrumb(static::$levelToSentry[$level], static::$levelToSentryType[$level], $levelName, "$location: $logMsg0"));
+			$this->sentry->addBreadcrumb(new \Sentry\Breadcrumb(
+				static::$levelToSentry[$level],
+				static::$levelToSentryType[$level],
+				$levelName,
+				$this->getFormattedValue($this->outputSentryFormat, $plainValue, $jsonValue)
+			));
 		}
 	}
 
-	protected function convertArgumentToString($a): ?string
+	protected function getFormattedValue(string $format, ?string $plainValue, ?string $jsonValue): string
+	{
+		return match($format)
+		{
+			self::OUTPUT_FORMAT_PLAIN => $plainValue,
+			self::OUTPUT_FORMAT_JSON => $jsonValue,
+			self::OUTPUT_FORMAT_HTML => htmlspecialchars($plainValue),
+			default => null,
+		};
+	}
+
+	protected function encodeJson(mixed $value): string
+	{
+		return (string)\json_encode($value, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PARTIAL_OUTPUT_ON_ERROR | JSON_ERROR_RECURSION | JSON_ERROR_INF_OR_NAN | JSON_ERROR_UNSUPPORTED_TYPE);
+	}
+
+	protected function normalizeThrowables(?array $throwables): array
+	{
+		if(empty($throwables))
+		{
+			return [];
+		}
+
+		return \array_map(fn(\Throwable $a) =>
+		[
+			'type' => $a::class,
+			'message' => $a->getMessage(),
+			'code' => $a->getCode(),
+			'file' => $a->getFile(),
+			'line' => $a->getLine(),
+			'trace' => $a->getTraceAsString(),
+		], $throwables);
+	}
+
+	protected function convertArgumentToString(mixed $a): ?string
 	{
 		try
 		{
@@ -463,7 +550,7 @@ class Logger
 		{
 			try
 			{
-				$a = \json_encode($a, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PARTIAL_OUTPUT_ON_ERROR | JSON_ERROR_RECURSION | JSON_ERROR_INF_OR_NAN | JSON_ERROR_UNSUPPORTED_TYPE);
+				$a = $this->encodeJson($a);
 			}
 			catch(\Throwable $ee)
 			{
@@ -474,7 +561,12 @@ class Logger
 		return $a;
 	}
 
-	protected function postprocessLogMessage(&$logMsg, $throwables): void
+	protected function postprocessLogMessage(string &$logMsg, ?array $throwables): void
+	{
+		//
+	}
+
+	protected function postprocessLogRecord(array &$record, ?array $throwables): void
 	{
 		//
 	}
@@ -531,12 +623,12 @@ class Logger
 		});
 	}
 
-	protected function postprocessSentryScope($scope, &$throwables): void
+	protected function postprocessSentryScope(\Sentry\State\Scope $scope, ?array &$throwables): void
 	{
 		//
 	}
 
-	public function enableImplicitFlush()
+	public function enableImplicitFlush(): void
 	{
 		while(ob_get_level()) ob_end_clean();
 		ob_implicit_flush(1);
@@ -548,9 +640,9 @@ class Logger
 		header('Content-Encoding: none');
 	}
 
-	public function setOutputBuffer(bool $outputBuffer): void
+	public function setOutputBuffer(bool|string $outputBuffer): void
 	{
-		$this->outputBuffer = $outputBuffer;
+		$this->configureOutput('buffer', $outputBuffer);
 
 		if($this->outputBuffer)
 		{
@@ -564,9 +656,9 @@ class Logger
 		}
 	}
 
-	public function setOutputOutput($outputOutput): void
+	public function setOutputOutput(bool|string $outputOutput): void
 	{
-		$this->outputOutput = $outputOutput;
+		$this->configureOutput('output', $outputOutput);
 
 		if($this->outputOutput && !$this->output)
 		{
@@ -574,9 +666,9 @@ class Logger
 		}
 	}
 
-	public function setOutputStderr($outputStderr): void
+	public function setOutputStderr(bool|string $outputStderr): void
 	{
-		$this->outputStderr = $outputStderr;
+		$this->configureOutput('stderr', $outputStderr);
 
 		if($this->outputStderr && !$this->stderr)
 		{
@@ -584,7 +676,69 @@ class Logger
 		}
 	}
 
-	public function setContext($k, $v = null): void
+	protected function configureOutput(string $name, mixed $value): void
+	{
+		$enabledProperty = 'output'.\ucfirst($name);
+		$formatProperty = $enabledProperty.'Format';
+		$allowedFormats =
+		[
+			self::OUTPUT_FORMAT_PLAIN,
+			self::OUTPUT_FORMAT_JSON,
+		];
+
+		if($enabledProperty === 'outputOutput')
+		{
+			$allowedFormats[] = self::OUTPUT_FORMAT_HTML;
+		}
+
+		if($value === false || $value === null)
+		{
+			$this->$enabledProperty = false;
+			$this->$formatProperty = self::OUTPUT_FORMAT_PLAIN;
+			$this->refreshEnabledFormats();
+
+			return;
+		}
+
+		$format = self::OUTPUT_FORMAT_PLAIN;
+
+		if(\is_string($value))
+		{
+			$format = \strtolower($value);
+		}
+
+		if(!\in_array($format, $allowedFormats, true))
+		{
+			$format = self::OUTPUT_FORMAT_PLAIN;
+		}
+
+		$this->$enabledProperty = true;
+		$this->$formatProperty = $format;
+		$this->refreshEnabledFormats();
+	}
+
+	protected function refreshEnabledFormats(): void
+	{
+		$this->enabledFormats =
+		[
+			self::OUTPUT_FORMAT_PLAIN => false,
+			self::OUTPUT_FORMAT_JSON => false,
+			self::OUTPUT_FORMAT_HTML => false,
+		];
+
+		foreach(static::OUTPUT_TYPES as $name)
+		{
+			$enabledProperty = 'output'.\ucfirst($name);
+			$formatProperty = $enabledProperty.'Format';
+
+			if($this->$enabledProperty)
+			{
+				$this->enabledFormats[$this->$formatProperty] = true;
+			}
+		}
+	}
+
+	public function setContext(array|string $k, mixed $v = null): void
 	{
 		if(\is_array($k))
 		{
@@ -665,12 +819,12 @@ class Logger
 			$socket = \socket_create(AF_INET, SOCK_DGRAM, SOL_UDP);
 		}
 
-		$msg = "<".((16*8)+$severity).">" . date('M d H:i:s') . ' ' . $this->syslogHostname . ' '.$this->syslogProcess[1].': ' . $message;
+		$msg = "<".((16*8)+$severity).">" . date('M d H:i:s') . ' ' . $this->syslogHostname . ' '.$this->syslogProcess.': ' . $message;
 
 		\socket_sendto($socket, $msg, strlen($msg), 0, $this->syslogHost, $this->syslogPort);
 	}
 
-	protected function getEnvOrConst($const)
+	protected function getEnvOrConst(string $const): mixed
 	{
 		if(function_exists('\env'))
 		{
@@ -690,7 +844,7 @@ class Logger
 		return $this->sentryLevel;
 	}
 
-	public function getBuffer()
+	public function getBuffer(): mixed
 	{
 		return $this->buffer;
 	}
@@ -705,7 +859,7 @@ class Logger
 		return $this->requestId;
 	}
 
-	public function getRequestStart(): string
+	public function getRequestStart(): int
 	{
 		return $this->requestStart;
 	}
