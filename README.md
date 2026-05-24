@@ -344,7 +344,84 @@ JSON output is newline-delimited and uses this record shape:
 When `rootDirectory` is configured, `file` is emitted relative to that root in
 both plain-text and JSON output.
 
-## Throwable Logging
+## Logging Throwables
+
+The logger does not install an exception handler. Log throwables explicitly from
+application code.
+
+For application-wide handling, register your own handlers after
+`Logger::create()`:
+
+```php
+use Siilike\Logging\Logger;
+
+set_error_handler(function($severity, $message, $file, $line)
+{
+	$er = error_reporting();
+
+	if(!($er & $severity) || $er === (E_ERROR | E_PARSE | E_CORE_ERROR | E_COMPILE_ERROR | E_USER_ERROR | E_RECOVERABLE_ERROR))
+	{
+		return false;
+	}
+
+	$ex = new \ErrorException($message, 0, $severity, $file, $line);
+
+	$level = null;
+
+	switch($severity)
+	{
+		case E_PARSE:
+		case E_CORE_ERROR:
+		case E_CORE_WARNING:
+		case E_COMPILE_ERROR:
+		case E_COMPILE_WARNING:
+		case E_USER_ERROR:
+		case E_RECOVERABLE_ERROR:
+		case E_ERROR:
+			throw $ex;
+		case E_USER_WARNING:
+		case E_WARNING:
+			throw $ex;
+			// or, if you want to log:
+			// $level = Logger::WARN;
+			// break;
+		case E_DEPRECATED:
+		case E_USER_DEPRECATED:
+			$level = Logger::DEBUG;
+			break;
+		case E_USER_NOTICE:
+		case E_STRICT:
+		case E_NOTICE:
+			$level = Logger::TRACE;
+			break;
+		default:
+			$level = Logger::WARN;
+	}
+
+	Logger::instance()->log($file, $line, $level, $message, []);
+
+	return true;
+});
+
+set_exception_handler(function($ex)
+{
+	error("{}", $ex);
+
+	if(ob_get_level())
+	{
+		ob_clean();
+	}
+
+	header("HTTP/1.1 500 Internal Server Error");
+	header('Content-Type: text/plain; charset=utf-8');
+
+	echo "An internal error has occurred. Please try again.";
+	exit(1);
+});
+```
+
+The error handler uses `Logger::log()` directly so the emitted record points at
+the original PHP error file and line.
 
 You can log a throwable directly:
 
